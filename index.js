@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 8000;
 
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 
 
@@ -40,6 +40,7 @@ app.get("/", (req, res) => {
 
 
 app.get('/users', async (req, res) => {
+  
     const cursor = users.find({});
     const result = await cursor.toArray();
     res.send(result);
@@ -74,11 +75,73 @@ app.post('/equipment', async (req, res) => {
 
 
 app.get('/equipment', async (req, res) => {
-    const cursor = addEquipment.find({});
+
+
+
+   const query = {};
+    // console.log('query', req.query);
+    if (req.query) {
+        if (req.query.category) {
+            query.category = req.query.category;
+        }
+        if (req.query.rentalType) {
+            query.rentalType = req.query.rentalType;
+        }
+        if (req.query.location) {
+            query.location = req.query.location;
+        }
+         if (req.query.ownerId) {
+            query.ownerId = req.query.ownerId;
+        }
+        if (req.query.search) {
+            query.$or = [
+                { brand: { $regex: req.query.search, $options: 'i' } },
+                { model: { $regex: req.query.search, $options: 'i' } },
+                { name: { $regex: req.query.search, $options: 'i' } },
+                { location: { $regex: req.query.search, $options: 'i' } }
+            ];
+        }
+    }
+
+
+
+
+
+    const cursor = addEquipment.find(query);
     const result = await cursor.toArray();
     res.send(result);
 })
 
+
+
+
+app.get('/equipment/:id', async (req, res) => {
+    const equipment = await addEquipment.findOne({ _id: new ObjectId(req.params.id) });
+    if (!equipment) {
+        return res.status(404).send({ message: "Equipment not found" });
+    }
+    res.send(equipment);
+})
+
+app.patch('/equipment/:id', async (req, res) => {
+    const { _id, ...updates } = req.body;
+    const result = await addEquipment.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: updates }
+    );
+    if (!result.matchedCount) {
+        return res.status(404).send({ message: "Equipment not found" });
+    }
+    res.send(result);
+})
+
+app.delete('/equipment/:id', async (req, res) => {
+    const result = await addEquipment.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!result.deletedCount) {
+        return res.status(404).send({ message: "Equipment not found" });
+    }
+    res.send(result);
+})
 
 
 
