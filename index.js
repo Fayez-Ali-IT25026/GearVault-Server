@@ -90,6 +90,23 @@ app.get('/equipment', async (req, res) => {
         if (req.query.location) {
             query.location = req.query.location;
         }
+        if (req.query.condition) {
+            query.condition = req.query.condition;
+        }
+        if (req.query.status) {
+            // status can be one value or a list: "Approved,Pending"
+            const statuses = req.query.status.split(',');
+            query.status = statuses.length > 1 ? { $in: statuses } : statuses[0];
+        }
+        if (req.query.minPrice || req.query.maxPrice) {
+            query.rentPrice = {};
+            if (req.query.minPrice) {
+                query.rentPrice.$gte = Number(req.query.minPrice);
+            }
+            if (req.query.maxPrice) {
+                query.rentPrice.$lte = Number(req.query.maxPrice);
+            }
+        }
          if (req.query.ownerId) {
             query.ownerId = req.query.ownerId;
         }
