@@ -7,6 +7,9 @@ import cors from "cors";
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+// Make user input safe to use inside a MongoDB regex.
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
@@ -88,7 +91,8 @@ app.get('/equipment', async (req, res) => {
             query.rentalType = req.query.rentalType;
         }
         if (req.query.location) {
-            query.location = req.query.location;
+            // Match any location that contains the text, e.g. "Dhaka" finds "Dhaka, Bangladesh".
+            query.location = { $regex: escapeRegex(req.query.location), $options: 'i' };
         }
         if (req.query.condition) {
             query.condition = req.query.condition;
