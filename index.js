@@ -110,23 +110,37 @@ app.get('/equipment', async (req, res) => {
          if (req.query.ownerId) {
             query.ownerId = req.query.ownerId;
         }
+        // if (req.query.search) {
+        //     query.$or = [
+        //         { brand: { $regex: req.query.search, $options: 'i' } },
+        //         { model: { $regex: req.query.search, $options: 'i' } },
+        //         { name: { $regex: req.query.search, $options: 'i' } },
+        //         { location: { $regex: req.query.search, $options: 'i' } }
+        //     ];
+        // }
         if (req.query.search) {
-            query.$or = [
-                { brand: { $regex: req.query.search, $options: 'i' } },
-                { model: { $regex: req.query.search, $options: 'i' } },
-                { name: { $regex: req.query.search, $options: 'i' } },
-                { location: { $regex: req.query.search, $options: 'i' } }
-            ];
-        }
+  const s = escapeRegex(req.query.search);
+  query.$or = [
+    { brand: { $regex: s, $options: 'i' } },
+    { model: { $regex: s, $options: 'i' } },
+    { name: { $regex: s, $options: 'i' } },
+    { location: { $regex: s, $options: 'i' } },
+    { category: { $regex: s, $options: 'i' } },
+  ];
+}
     }
 
 
 
+let cursor = addEquipment.find(query);
+if (req.query.sort === 'newest') cursor = cursor.sort({ createdAt: -1 });
+if (req.query.limit) cursor = cursor.limit(Number(req.query.limit));
+const result = await cursor.toArray();
+res.send(result);
 
-
-    const cursor = addEquipment.find(query);
-    const result = await cursor.toArray();
-    res.send(result);
+    // const cursor = addEquipment.find(query);
+    // const result = await cursor.toArray();
+    // res.send(result);
 })
 
 
