@@ -340,7 +340,7 @@ app.patch('/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid role' });
     }
     const result = await users.updateOne(
-      { _id: req.params.id },
+      { _id: new ObjectId(req.params.id) },
       { $set: { role, updatedAt: new Date() } }
     );
     if (!result.matchedCount) {
@@ -356,7 +356,7 @@ app.patch('/users/:id', async (req, res) => {
 // Delete a user
 app.delete('/users/:id', async (req, res) => {
   try {
-    const result = await users.deleteOne({ _id: req.params.id });
+    const result = await users.deleteOne({ _id: new ObjectId(req.params.id) });
     if (!result.deletedCount) {
       return res.status(404).json({ error: 'User not found' });
     }
