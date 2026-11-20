@@ -40,6 +40,8 @@ const db = connectedClient.db('gear-vault');
 const users = db.collection('user');
 const addEquipment = db.collection('add-Equipment');
 const rentCollection = db.collection('rent-collection');
+// Favorites collection
+const favorites = db.collection('favorites');
 
 
 const checkAuthenticatedUser = async (req, res, next) => {
@@ -386,8 +388,39 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
-// Favorites collection
-const favorites = db.collection('favorites');
+// Get all rentals for an owner's equipment
+app.get('/owner-rentals', async (req, res) => {
+  try {
+    const { ownerId } = req.query;
+    if (!ownerId) {
+      return res.status(400).json({ error: 'ownerId query param is required' });
+    }
+    const rentals = await rentCollection
+      .find({ ownerId: String(ownerId) })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Join customer details and equipment image
+    const result = await Promise.all(
+      rentals.map(async (rental) => {
+        const customer = await users.findOne({ email: rental.customerEmail });
+        const equipment = await addEquipment.findOne({ _id: new ObjectId(rental.equipmentId) });
+        return {
+          ...rental,
+          customerName: customer?.name || rental.customerEmail,
+          customerImage: customer?.image || null,
+          equipmentImage: equipment?.image || null,
+        };
+      })
+    );
+
+    res.send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load owner rentals' });
+  }
+})
+
 
 // Add a favorite
 app.post('/favorites', async (req, res) => {
