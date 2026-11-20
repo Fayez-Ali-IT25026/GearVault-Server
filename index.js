@@ -332,6 +332,41 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
+// Update a user's role (admin, customer, owner)
+app.patch('/users/:id', async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!role || !['customer', 'admin', 'owner'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    const result = await users.updateOne(
+      { _id: req.params.id },
+      { $set: { role, updatedAt: new Date() } }
+    );
+    if (!result.matchedCount) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+})
+
+// Delete a user
+app.delete('/users/:id', async (req, res) => {
+  try {
+    const result = await users.deleteOne({ _id: req.params.id });
+    if (!result.deletedCount) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+})
+
 
 
 
