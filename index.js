@@ -386,6 +386,81 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
+// Favorites collection
+const favorites = db.collection('favorites');
+
+// Add a favorite
+app.post('/favorites', async (req, res) => {
+  try {
+    const { equipmentId, userEmail } = req.body;
+    if (!equipmentId || !userEmail) {
+      return res.status(400).json({ error: 'equipmentId and userEmail are required' });
+    }
+    // Check if already favorited
+    const existing = await favorites.findOne({ equipmentId, userEmail });
+    if (existing) {
+      return res.json({ success: true, message: 'Already favorited' });
+    }
+    await favorites.insertOne({ equipmentId, userEmail, createdAt: new Date() });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to add favorite' });
+  }
+});
+
+// Remove a favorite
+app.delete('/favorites', async (req, res) => {
+  try {
+    const { equipmentId, userEmail } = req.body;
+    if (!equipmentId || !userEmail) {
+      return res.status(400).json({ error: 'equipmentId and userEmail are required' });
+    }
+    await favorites.deleteOne({ equipmentId, userEmail });
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove favorite' });
+  }
+});
+
+// Get all favorites for a user (with equipment details)
+app.get('/favorites', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: 'email query param is required' });
+    }
+    const favs = await favorites.find({ userEmail: String(email) }).sort({ createdAt: -1 }).toArray();
+    // Join equipment details
+    const result = await Promise.all(
+      favs.map(async (fav) => {
+        const equipment = await addEquipment.findOne({ _id: new ObjectId(fav.equipmentId) });
+        return equipment ? { ...equipment, favoritedAt: fav.createdAt } : null;
+      })
+    );
+    res.send(result.filter(Boolean));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load favorites' });
+  }
+});
+
+// Check if an equipment is favorited by a user
+app.get('/favorites/check', async (req, res) => {
+  try {
+    const { equipmentId, email } = req.query;
+    if (!equipmentId || !email) {
+      return res.status(400).json({ error: 'equipmentId and email are required' });
+    }
+    const existing = await favorites.findOne({ equipmentId: String(equipmentId), userEmail: String(email) });
+    res.json({ isFav: !!existing });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to check favorite' });
+  }
+});
+
 // Update a user's profile (name, image, role)
 app.patch('/users/:id', async (req, res) => {
   try {
