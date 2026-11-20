@@ -274,6 +274,41 @@ app.post("/webhook", async (req, res) => {
 
 
 
+app.get('/my-rentals', async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: "Email parameter is required" });
+    }
+
+    // Find all bookings for this customer email, sorted newest first
+    const bookings = await rentCollection
+      .find({ customerEmail: String(email) })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // For each booking, join equipment details from add-Equipment
+    const rentals = await Promise.all(
+      bookings.map(async (booking) => {
+        const equipment = await addEquipment.findOne({
+          _id: new ObjectId(booking.equipmentId),
+        });
+        return {
+          ...booking,
+          equipmentImage: equipment?.image || "",
+          equipmentCategory: equipment?.category || "",
+          equipmentLocation: equipment?.location || "",
+        };
+      })
+    );
+
+    res.send(rentals);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load rentals" });
+  }
+});
+
 app.get('/users', async (req, res) => {
   
     const cursor = users.find({});
