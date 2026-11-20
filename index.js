@@ -46,6 +46,22 @@ app.get("/", (req, res) => {
   res.send("Server running fine");
 });
 
+
+app.get("/users", async (req, res) => {
+
+  const usersList = await users.find({}).toArray();
+
+  res.json({ users: usersList });
+});
+
+
+
+
+
+
+
+
+
 //stripe payment intent
 
 // app.post(
