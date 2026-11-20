@@ -14,7 +14,11 @@ const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+// keep the raw body so the Stripe webhook can verify its signature
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 
 
 
@@ -118,10 +122,13 @@ app.get("/", (req, res) => {
 
 app.post("/create-checkout-session",  async (req, res) => {
   try {
-    const { equipmentId, startDate, endDate, quantity, contact, address, notes } = req.body;
+    const { equipmentId, customerEmail, startDate, endDate, quantity, contact, address, notes } = req.body;
 
     if (!ObjectId.isValid(equipmentId)) {
       return res.status(400).json({ error: "Invalid equipment id" });
+    }
+    if (!customerEmail) {
+      return res.status(400).json({ error: "Please login before booking" });
     }
     const equipment = await addEquipment.findOne({ _id: new ObjectId(equipmentId) });
     if (!equipment) return res.status(404).json({ error: "Equipment not found" });
@@ -142,7 +149,7 @@ app.post("/create-checkout-session",  async (req, res) => {
       equipmentName: equipment.name,
       ownerId: equipment.ownerId,
       ownerEmail: equipment.ownerEmail,
-      customerEmail: req.user.email,
+      customerEmail,
       startDate: start,
       endDate: end,
       quantity: qty,
@@ -158,7 +165,7 @@ app.post("/create-checkout-session",  async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      customer_email: req.user.email,
+      customer_email: customerEmail,
       line_items: [{
         quantity: 1,
         price_data: {
@@ -179,28 +186,74 @@ app.post("/create-checkout-session",  async (req, res) => {
   }
 });
 
+// Marks an unpaid booking as paid and saves a payment record.
+// Both the success page (/payment/confirm) and the Stripe webhook call this.
+async function markBookingPaid(session) {
+  const bookingIdValue = session.metadata?.bookingId;
+  if (!bookingIdValue) return; // not one of our checkout sessions
+
+  const bookingId = new ObjectId(bookingIdValue);
+  const updated = await rentCollection.updateOne(
+    { _id: bookingId, paymentStatus: "unpaid" },
+    { $set: { paymentStatus: "paid", status: "confirmed", paidAt: new Date() } }
+  );
+
+  // modifiedCount is 0 when this booking was already confirmed, so we never save twice.
+  if (!updated.modifiedCount) return;
+
+  await db.collection("payments").insertOne({
+    bookingId,
+    transactionId: session.payment_intent,
+    amount: session.amount_total / 100,
+    currency: session.currency,
+    customerEmail: session.customer_email,
+    createdAt: new Date(),
+  });
+}
+
 // call this from the success page
-app.post("/payment/confirm",  async (req, res) => {
+app.post("/payment/confirm", async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.body.sessionId);
     if (session.payment_status !== "paid") {
       return res.status(400).json({ error: "Payment not completed" });
     }
-    const bookingId = new ObjectId(session.metadata.bookingId);
-    const updated = await rentCollection.updateOne(
-      { _id: bookingId, paymentStatus: "unpaid" },
-      { $set: { paymentStatus: "paid", status: "confirmed", paidAt: new Date() } }
-    );
-    if (updated.modifiedCount) {
-      await db.collection("payments").insertOne({
-        bookingId, transactionId: session.payment_intent,
-        amount: session.amount_total / 100, currency: session.currency,
-        customerEmail: session.customer_email, createdAt: new Date(),
-      });
-    }
+    await markBookingPaid(session);
     res.send({ success: true });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Could not confirm payment" });
+  }
+});
+
+// Stripe calls this after a payment. It works even if the user closes the success page.
+app.post("/webhook", async (req, res) => {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(500).send("Missing STRIPE_WEBHOOK_SECRET in .env");
+  }
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.rawBody,
+      req.headers["stripe-signature"],
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    return res.status(400).send(`Webhook error: ${err.message}`);
+  }
+
+  try {
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      if (session.payment_status === "paid") {
+        await markBookingPaid(session);
+      }
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Webhook failed" });
   }
 });
 
