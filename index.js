@@ -47,12 +47,7 @@ app.get("/", (req, res) => {
 });
 
 
-app.get("/users", async (req, res) => {
-
-  const usersList = await users.find({}).toArray();
-
-  res.json({ users: usersList });
-});
+// (removed duplicate /users endpoint - the one below returns the array directly)
 
 
 
@@ -332,24 +327,28 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
-// Update a user's role (admin, customer, owner)
+// Update a user's profile (name, image, role)
 app.patch('/users/:id', async (req, res) => {
   try {
-    const { role } = req.body;
-    if (!role || !['customer', 'admin', 'owner'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
-    }
+    const { name, image, role } = req.body;
+    const updates = { updatedAt: new Date() };
+    if (name) updates.name = name;
+    if (image !== undefined) updates.image = image;
+    if (role && ['customer', 'admin', 'owner'].includes(role)) updates.role = role;
+
     const result = await users.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: { role, updatedAt: new Date() } }
+      { $set: updates }
     );
     if (!result.matchedCount) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ success: true });
+    // Return the updated user
+    const updated = await users.findOne({ _id: new ObjectId(req.params.id) });
+    res.json(updated);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to update role' });
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 })
 
