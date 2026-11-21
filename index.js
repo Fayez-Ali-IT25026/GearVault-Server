@@ -208,8 +208,26 @@ app.post("/create-checkout-session",  async (req, res) => {
     const qty = Number(quantity);
     const start = new Date(startDate);
     const end = new Date(endDate);
-    if (!(qty >= 1) || qty > equipment.quantity || isNaN(start) || isNaN(end) || end < start) {
-      return res.status(400).json({ error: "Invalid booking details or not enough quantity" });
+    if (!(qty >= 1) || isNaN(start) || isNaN(end) || end < start) {
+      return res.status(400).json({ error: "Invalid booking details" });
+    }
+
+    // Check overlapping bookings for the same equipment and date range.
+    // Two bookings overlap if: newStart <= existingEnd AND newEnd >= existingStart
+    const overlapping = await rentCollection.find({
+      equipmentId,
+      status: { $ne: "cancelled" },
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    }).toArray();
+
+    const alreadyBooked = overlapping.reduce((sum, b) => sum + (b.quantity || 0), 0);
+    const available = equipment.quantity - alreadyBooked;
+
+    if (qty > available) {
+      return res.status(400).json({
+        error: `Not enough quantity available. Only ${available} item(s) left for these dates.`,
+      });
     }
 
     const days = Math.ceil((end - start) / 86400000) + 1;
