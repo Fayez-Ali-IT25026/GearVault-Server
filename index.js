@@ -388,6 +388,36 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
+// Get ALL rentals (admin view) with customer, owner, and equipment details
+app.get('/rentals', async (req, res) => {
+  try {
+    const rentals = await rentCollection
+      .find({})
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    const result = await Promise.all(
+      rentals.map(async (rental) => {
+        const customer = await users.findOne({ email: rental.customerEmail });
+        const owner = await users.findOne({ email: rental.ownerEmail });
+        const equipment = await addEquipment.findOne({ _id: new ObjectId(rental.equipmentId) });
+        return {
+          ...rental,
+          customerName: customer?.name || rental.customerEmail,
+          customerImage: customer?.image || null,
+          ownerName: owner?.name || rental.ownerEmail,
+          equipmentImage: equipment?.image || null,
+        };
+      })
+    );
+
+    res.send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load rentals' });
+  }
+});
+
 // Get all rentals for an owner's equipment
 app.get('/owner-rentals', async (req, res) => {
   try {
