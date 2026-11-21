@@ -524,14 +524,16 @@ app.get('/favorites/check', async (req, res) => {
   }
 });
 
-// Update a user's profile (name, image, role)
+// Update a user's profile (name, image, role, phone, address)
 app.patch('/users/:id', async (req, res) => {
   try {
-    const { name, image, role } = req.body;
+    const { name, image, role, phone, address } = req.body;
     const updates = { updatedAt: new Date() };
     if (name) updates.name = name;
     if (image !== undefined) updates.image = image;
     if (role && ['customer', 'admin', 'owner'].includes(role)) updates.role = role;
+    if (phone !== undefined) updates.phone = phone;
+    if (address !== undefined) updates.address = address;
 
     const result = await users.updateOne(
       { _id: new ObjectId(req.params.id) },
