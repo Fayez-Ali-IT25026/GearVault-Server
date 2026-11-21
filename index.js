@@ -406,6 +406,95 @@ app.get('/users', async (req, res) => {
     res.send(result);
 })
 
+// Admin stats: monthly bookings, monthly earnings, pending approvals
+app.get('/admin-stats', async (req, res) => {
+  try {
+    const rentals = await rentCollection.find({}).toArray();
+    const pendingEquipment = await addEquipment.countDocuments({ status: "Pending" });
+
+    // Group by month
+    const bookingsByMonth = {};
+    const earningsByMonth = {};
+
+    rentals.forEach((r) => {
+      const date = new Date(r.createdAt);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      bookingsByMonth[key] = (bookingsByMonth[key] || 0) + 1;
+      if (r.paymentStatus === "paid") {
+        earningsByMonth[key] = (earningsByMonth[key] || 0) + (r.totalAmount || 0);
+      }
+    });
+
+    // Build last 6 months array
+    const months = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleString("default", { month: "short" });
+      months.push({
+        month: label,
+        bookings: bookingsByMonth[key] || 0,
+        earnings: earningsByMonth[key] || 0,
+      });
+    }
+
+    res.json({
+      monthlyBookings: months.map((m) => ({ month: m.month, count: m.bookings })),
+      monthlyEarnings: months.map((m) => ({ month: m.month, amount: m.earnings })),
+      pendingApprovals: pendingEquipment,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load admin stats" });
+  }
+});
+
+// Owner stats: monthly bookings, monthly earnings, pending approvals
+app.get('/owner-stats', async (req, res) => {
+  try {
+    const { ownerId } = req.query;
+    if (!ownerId) return res.status(400).json({ error: "ownerId is required" });
+
+    const rentals = await rentCollection.find({ ownerId: String(ownerId) }).toArray();
+    const pendingEquipment = await addEquipment.countDocuments({ ownerId: String(ownerId), status: "Pending" });
+
+    const bookingsByMonth = {};
+    const earningsByMonth = {};
+
+    rentals.forEach((r) => {
+      const date = new Date(r.createdAt);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      bookingsByMonth[key] = (bookingsByMonth[key] || 0) + 1;
+      if (r.paymentStatus === "paid") {
+        earningsByMonth[key] = (earningsByMonth[key] || 0) + (r.totalAmount || 0);
+      }
+    });
+
+    const months = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleString("default", { month: "short" });
+      months.push({
+        month: label,
+        bookings: bookingsByMonth[key] || 0,
+        earnings: earningsByMonth[key] || 0,
+      });
+    }
+
+    res.json({
+      monthlyBookings: months.map((m) => ({ month: m.month, count: m.bookings })),
+      monthlyEarnings: months.map((m) => ({ month: m.month, amount: m.earnings })),
+      pendingApprovals: pendingEquipment,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load owner stats" });
+  }
+});
+
 // Get ALL rentals (admin view) with customer, owner, and equipment details
 app.get('/rentals', async (req, res) => {
   try {
