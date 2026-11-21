@@ -654,6 +654,8 @@ app.get('/equipment', async (req, res) => {
 
 let cursor = addEquipment.find(query);
 if (req.query.sort === 'newest') cursor = cursor.sort({ createdAt: -1 });
+if (req.query.sort === 'price_asc') cursor = cursor.sort({ rentPrice: 1 });
+if (req.query.sort === 'price_desc') cursor = cursor.sort({ rentPrice: -1 });
 if (req.query.limit) cursor = cursor.limit(Number(req.query.limit));
 const result = await cursor.toArray();
 res.send(result);
